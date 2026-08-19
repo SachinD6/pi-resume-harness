@@ -11,11 +11,26 @@ export function normalizeCwd(cwd: string): string {
 	return resolve(expandHome(cwd));
 }
 
+export function isBroadRoot(cwd: string): boolean {
+	const normalized = normalizeCwd(cwd);
+	return normalized === homedir() || normalized === "/";
+}
+
 export function cwdWithin(candidate: string | null | undefined, target: string): boolean {
 	if (!candidate) return false;
 	const a = normalizeCwd(candidate);
 	const b = normalizeCwd(target);
 	return a === b || a.startsWith(`${b}${sep}`) || b.startsWith(`${a}${sep}`);
+}
+
+/** Exact cwd, or a nested project path. Never treat $HOME/`/` as covering every child. */
+export function cursorCwdMatches(sessionCwd: string | null | undefined, queryCwd: string): boolean {
+	if (!sessionCwd) return false;
+	const session = normalizeCwd(sessionCwd);
+	const query = normalizeCwd(queryCwd);
+	if (session === query) return true;
+	if (isBroadRoot(session) || isBroadRoot(query)) return false;
+	return session.startsWith(`${query}${sep}`) || query.startsWith(`${session}${sep}`);
 }
 
 export function slugifyClaude(cwd: string): string {

@@ -1,3 +1,17 @@
+const USER_QUERY_RE = /<user_query>\s*([\s\S]*?)\s*<\/user_query>/gi;
+const BLOCKED_CURSOR_WRAPPER =
+	/^<(timestamp|environment_context|user_instructions|system_reminder|manually_attached_skills)\b/i;
+
+/** Pull the visible user prompt out of Cursor Desktop XML wrappers. */
+export function cursorUserText(text: string): string | null {
+	const queries = [...text.matchAll(USER_QUERY_RE)].map((match) => match[1].trim()).filter(Boolean);
+	if (queries.length) return queries.join("\n");
+	const stripped = text.trimStart();
+	if (BLOCKED_CURSOR_WRAPPER.test(stripped)) return null;
+	const cleaned = text.replace(/<\/?timestamp[^>]*>/gi, "").trim();
+	return cleaned || null;
+}
+
 export function oneLine(value: unknown, limit: number): string {
 	const text = String(value ?? "")
 		.replace(/\s+/g, " ")

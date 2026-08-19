@@ -2,8 +2,9 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
-	cwdWithin,
+	cursorCwdMatches,
 	encodeCursorProject,
+	isBroadRoot,
 	isLatestRef,
 	isUuid,
 	looksLikePath,
@@ -11,7 +12,7 @@ import {
 } from "../cwd.ts";
 import { isoToMs, mtimeMs, readJsonl, type JsonRecord } from "../jsonl.ts";
 import { asShow, boundTurns, titleFromTurns } from "../signals.ts";
-import { blocks, clip, jsonPreview, oneLine } from "../text.ts";
+import { blocks, clip, cursorUserText, jsonPreview, oneLine } from "../text.ts";
 import {
 	DEFAULT_MAX_TEXT_CHARS,
 	DEFAULT_MAX_TOOL_CHARS,
@@ -54,7 +55,12 @@ function matchingProjectDirs(projectsRoot: string, cwd: string): Array<{ dir: st
 	try {
 		for (const entry of readdirSync(projectsRoot, { withFileTypes: true })) {
 			if (!entry.isDirectory()) continue;
-			if (entry.name === encoded || entry.name.startsWith(`${encoded}-`)) {
+			if (entry.name === encoded) {
+				matches.push({ dir: join(projectsRoot, entry.name), cwd: normalizeCwd(cwd) });
+				continue;
+			}
+			// Subdirectory project folders (`<cwd-slug>-src`), but never every project under $HOME.
+			if (!isBroadRoot(cwd) && entry.name.startsWith(`${encoded}-`)) {
 				matches.push({ dir: join(projectsRoot, entry.name), cwd: normalizeCwd(cwd) });
 				continue;
 			}
@@ -100,7 +106,9 @@ function renderCursorRecord(record: JsonRecord, maxText: number, maxTool: number
 	for (const block of blocks(content)) {
 		const type = block.type;
 		if (type === "text" || type === "input_text" || type === "output_text" || !type) {
-			if (typeof block.text === "string" && block.text.trim()) texts.push(clip(block.text, maxText));
+			if (typeof block.text !== "string" || !block.text.trim()) continue;
+			const rendered = role === "user" ? cursorUserText(block.text) : block.text;
+			if (rendered) texts.push(clip(rendered, maxText));
 		} else if (type === "tool_use" || type === "tool_call") {
 			toolCalls.push({
 				id: typeof block.id === "string" ? block.id : undefined,
@@ -116,7 +124,10 @@ function renderCursorRecord(record: JsonRecord, maxText: number, maxTool: number
 			});
 		}
 	}
-	if (typeof content === "string" && content.trim()) texts.push(clip(content, maxText));
+	if (typeof content === "string" && content.trim()) {
+		const rendered = role === "user" ? cursorUserText(content) : content;
+		if (rendered) texts.push(clip(rendered, maxText));
+	}
 	if (role === "tool" && typeof record.tool_name === "string") {
 		toolResults.push({
 			content: oneLine(texts.join("\n") || jsonPreview(content, maxTool), maxTool),
@@ -204,7 +215,7 @@ function cliChatSessions(root: string, cwd: string, options: ReaderOptions): Ses
 						// ignore bad metadata
 					}
 				}
-				if (!metaCwd || !cwdWithin(metaCwd, cwd)) continue;
+				if (!metaCwd || !cursorCwdMatches(metaCwd, cwd)) continue;
 				const transcriptDir = join(dir, "transcripts");
 				const files = existsSync(transcriptDir)
 					? readdirSync(transcriptDir)

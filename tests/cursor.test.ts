@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { encodeCursorProject } from "../src/cwd.ts";
 import { cursorReader } from "../src/readers/cursor.ts";
+import { cursorUserText } from "../src/text.ts";
 import { tempDir, writeJson, writeJsonl } from "./helpers.ts";
 
 const SESSION = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -70,4 +72,53 @@ test("cursor cli chats use metadata cwd", async () => {
 	assert.equal(listed.length, 1);
 	assert.equal(listed[0].title, "CLI chat");
 	assert.equal(listed[0].source, "cursor-cli-chat");
+});
+
+test("cursorUserText unwraps Desktop user_query wrappers", () => {
+	assert.equal(
+		cursorUserText(
+			"<timestamp>Wednesday, Aug 19, 2026, 11:23 PM (UTC+5:30)</timestamp>\n<user_query>\nhey\n</user_query>",
+		),
+		"hey",
+	);
+	assert.equal(cursorUserText("<timestamp>now</timestamp>"), null);
+	assert.equal(cursorUserText("Add dark mode"), "Add dark mode");
+});
+
+test("cursor list from $HOME does not swallow every project", async () => {
+	const home = tempDir("pi-resume-cursor-home-");
+	const projectCwd = "/tmp/bfc-global-frontend";
+	writeJsonl(
+		join(
+			home,
+			"projects",
+			encodeCursorProject(projectCwd),
+			"agent-transcripts",
+			SESSION,
+			`${SESSION}.jsonl`,
+		),
+		[
+			{
+				role: "user",
+				message: {
+					content: [
+						{
+							type: "text",
+							text: "<timestamp>Wednesday, Aug 19, 2026, 11:23 PM (UTC+5:30)</timestamp>\n<user_query>\nhey\n</user_query>",
+						},
+					],
+				},
+			},
+			{ role: "assistant", message: { content: [{ type: "text", text: "What do you want to work on?" }] } },
+		],
+	);
+
+	const fromHome = await cursorReader.list({ cwd: homedir(), home });
+	assert.equal(fromHome.length, 0);
+
+	const fromProject = await cursorReader.list({ cwd: projectCwd, home });
+	assert.equal(fromProject.length, 1);
+	assert.equal(fromProject[0].cwd, projectCwd);
+	assert.equal(fromProject[0].title, "hey");
+	assert.equal(fromProject[0].lastUserRequest, "hey");
 });
