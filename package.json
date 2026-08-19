@@ -1,0 +1,48 @@
+{
+  "name": "pi-resume-harness",
+  "version": "0.1.0",
+  "description": "Resume Claude Code, Cursor, and Codex sessions inside Pi via /resume-claude, /resume-cursor, /resume-codex, and /resume-foreign",
+  "type": "module",
+  "license": "MIT",
+  "author": "Sachin Duhan",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sachind6/pi-resume.git"
+  },
+  "homepage": "https://github.com/sachind6/pi-resume#readme",
+  "bugs": {
+    "url": "https://github.com/sachind6/pi-resume/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-coding-agent",
+    "resume",
+    "claude-code",
+    "cursor",
+    "codex",
+    "session"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "extensions",
+    "src",
+    "skills",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "test": "node --test --experimental-strip-types tests/*.test.ts"
+  },
+  "pi": {
+    "extensions": ["./extensions/resume.ts"],
+    "skills": ["./skills"]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}

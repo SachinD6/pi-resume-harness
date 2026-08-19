@@ -1,0 +1,298 @@
+import { existsSync, readdirSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { cwdWithin, isLatestRef, isUuid, looksLikePath, normalizeCwd, slugifyClaude } from "../cwd.ts";
+import { isoToMs, mtimeMs, readJsonl, type JsonRecord } from "../jsonl.ts";
+import { asShow, boundTurns, titleFromTurns } from "../signals.ts";
+import { blocks, clip, jsonPreview, oneLine } from "../text.ts";
+import {
+	DEFAULT_MAX_TEXT_CHARS,
+	DEFAULT_MAX_TOOL_CHARS,
+	DEFAULT_MAX_TURNS,
+	type ReaderOptions,
+	type SessionReader,
+	type SessionShow,
+	type SessionSummary,
+	type ShowResult,
+	type Turn,
+	type Warning,
+	UUID_RE,
+} from "../types.ts";
+
+const META_FLAGS = ["isMeta", "isCompactSummary", "isVirtual", "isVisibleInTranscriptOnly"] as const;
+
+function claudeHome(home?: string): string {
+	if (home) return home;
+	if (process.env.CLAUDE_CONFIG_DIR) return process.env.CLAUDE_CONFIG_DIR;
+	return join(homedir(), ".claude");
+}
+
+function projectDirs(projectsRoot: string, cwd: string): string[] {
+	if (!existsSync(projectsRoot)) return [];
+	const expected = slugifyClaude(cwd);
+	const found = new Set<string>();
+	const add = (name: string) => {
+		const path = join(projectsRoot, name);
+		if (existsSync(path)) found.add(path);
+	};
+	add(expected);
+	try {
+		for (const entry of readdirSync(projectsRoot, { withFileTypes: true })) {
+			if (entry.isDirectory() && entry.name.startsWith(`${expected}-`)) add(entry.name);
+		}
+	} catch {
+		// ignore unreadable project trees
+	}
+	let parent = normalizeCwd(cwd);
+	while (parent !== "/") {
+		const next = parent.slice(0, parent.lastIndexOf("/")) || "/";
+		if (next === parent) break;
+		parent = next;
+		add(slugifyClaude(parent));
+	}
+	return [...found];
+}
+
+function sessionFiles(dir: string): string[] {
+	try {
+		return readdirSync(dir, { withFileTypes: true })
+			.filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl") && UUID_RE.test(entry.name.slice(0, -6)))
+			.map((entry) => join(dir, entry.name));
+	} catch {
+		return [];
+	}
+}
+
+function skipRecord(record: JsonRecord): boolean {
+	if (record.isSidechain) return true;
+	return META_FLAGS.some((flag) => record[flag]);
+}
+
+function userDisplayText(content: unknown, maxText: number): string | null {
+	const texts: string[] = [];
+	for (const block of blocks(content)) {
+		const type = block.type;
+		if (type === "text" || type === "input_text" || type === "output_text") {
+			if (typeof block.text === "string" && block.text.trim()) texts.push(block.text);
+		}
+	}
+	const raw = texts.join("\n").trim();
+	if (!raw) return null;
+	const command = raw.match(/<command-name>\s*([^<]+?)\s*<\/command-name>/i);
+	if (command) {
+		const args = raw.match(/<command-args>\s*([^<]*?)\s*<\/command-args>/i);
+		const name = command[1].trim();
+		const argText = args?.[1]?.trim();
+		return oneLine(argText ? `${name} ${argText}` : name, maxText);
+	}
+	if (/^\s*</.test(raw) || /^\s*\[Request interrupted by user/i.test(raw)) return null;
+	return clip(raw, maxText);
+}
+
+function renderTurn(record: JsonRecord, maxText: number, maxTool: number): Turn | null {
+	if (record.type !== "user" && record.type !== "assistant") return null;
+	if (skipRecord(record)) return null;
+	const message = record.message;
+	if (!message || typeof message !== "object") return null;
+	const role =
+		(message as JsonRecord).role === "user" || (message as JsonRecord).role === "assistant"
+			? ((message as JsonRecord).role as "user" | "assistant")
+			: record.type;
+	const turn: Turn = { role, text: "" };
+	const texts: string[] = [];
+	const toolCalls: NonNullable<Turn["toolCalls"]> = [];
+	const toolResults: NonNullable<Turn["toolResults"]> = [];
+	for (const block of blocks((message as JsonRecord).content)) {
+		const type = block.type;
+		if (type === "thinking" || type === "redacted_thinking" || type === "signature") continue;
+		if (type === "text" || type === "input_text" || type === "output_text") {
+			if (typeof block.text === "string" && block.text.trim()) texts.push(clip(block.text, maxText));
+		} else if (type === "tool_use") {
+			toolCalls.push({
+				id: typeof block.id === "string" ? block.id : undefined,
+				name: String(block.name || "unknown"),
+				input: jsonPreview(block.input ?? {}, maxTool),
+				inert: true,
+			});
+		} else if (type === "tool_result") {
+			toolResults.push({
+				toolUseId: typeof block.tool_use_id === "string" ? block.tool_use_id : undefined,
+				content: oneLine(typeof block.content === "string" ? block.content : jsonPreview(block.content, maxTool), maxTool),
+				isError: Boolean(block.is_error),
+				inert: true,
+			});
+		} else if (type === "image") {
+			texts.push("[image content unavailable]");
+		}
+	}
+	turn.text = texts.filter(Boolean).join("\n");
+	if (toolCalls.length) turn.toolCalls = toolCalls;
+	if (toolResults.length) turn.toolResults = toolResults;
+	if (!turn.text && !turn.toolCalls && !turn.toolResults) return null;
+	return turn;
+}
+
+function claudeTitle(records: JsonRecord[], turns: Turn[]): string | null {
+	const fields: Array<[string, string]> = [
+		["custom-title", "customTitle"],
+		["ai-title", "aiTitle"],
+		["last-prompt", "lastPrompt"],
+		["summary", "summary"],
+	];
+	const newest = new Map<string, string>();
+	for (const record of [...records].reverse()) {
+		const type = String(record.type ?? "");
+		const field = fields.find(([name]) => name === type)?.[1];
+		if (!field || newest.has(type)) continue;
+		const value = record[field];
+		if (typeof value === "string" && value.trim()) newest.set(type, value);
+		if (newest.size === fields.length) break;
+	}
+	for (const [type] of fields) {
+		const value = newest.get(type);
+		if (value) return oneLine(value, 200);
+	}
+	for (const record of [...records].reverse()) {
+		if (record.type !== "user" || skipRecord(record)) continue;
+		const message = record.message;
+		if (!message || typeof message !== "object") continue;
+		const text = userDisplayText((message as JsonRecord).content, 200);
+		if (text) return text;
+	}
+	return titleFromTurns(turns);
+}
+
+function sessionCwd(records: JsonRecord[]): string | null {
+	for (const record of records) {
+		if (typeof record.cwd === "string" && record.cwd) return record.cwd;
+	}
+	return null;
+}
+
+function sessionBranch(records: JsonRecord[]): string | null {
+	for (const record of [...records].reverse()) {
+		if (typeof record.gitBranch === "string" && record.gitBranch) return record.gitBranch;
+	}
+	return null;
+}
+
+function parseSession(path: string, options: ReaderOptions): SessionShow | null {
+	const maxText = options.maxTextChars ?? DEFAULT_MAX_TEXT_CHARS;
+	const maxTool = options.maxToolChars ?? DEFAULT_MAX_TOOL_CHARS;
+	const maxTurns = options.maxTurns ?? DEFAULT_MAX_TURNS;
+	let parsed: ReturnType<typeof readJsonl>;
+	try {
+		parsed = readJsonl(path);
+	} catch {
+		return null;
+	}
+	const warnings: Warning[] = [];
+	if (parsed.malformed) {
+		warnings.push({
+			code: "malformed_records_skipped",
+			message: `Skipped ${parsed.malformed} malformed Claude transcript record(s).`,
+		});
+	}
+	if (parsed.records.some((record) => record.type === "system" && record.subtype === "compact_boundary")) {
+		warnings.push({
+			code: "compaction_present",
+			message: "Claude compaction markers were found; pre-compact history may be incomplete.",
+		});
+	}
+	const turns = parsed.records
+		.map((record) => renderTurn(record, maxText, maxTool))
+		.filter((turn): turn is Turn => turn !== null);
+	const bounded = boundTurns(turns, maxTurns);
+	if (bounded.truncated) {
+		warnings.push({
+			code: "turns_truncated",
+			message: `Only the last ${maxTurns} recoverable turns were included.`,
+		});
+	}
+	const cwd = sessionCwd(parsed.records);
+	const updated =
+		isoToMs([...parsed.records].reverse().find((record) => typeof record.timestamp === "string")?.timestamp) ??
+		mtimeMs(path);
+	const created =
+		isoToMs(parsed.records.find((record) => typeof record.timestamp === "string")?.timestamp) ?? updated;
+	return asShow({
+		harness: "claude",
+		sessionId: path.replace(/^.*[\\/]/, "").replace(/\.jsonl$/, ""),
+		title: claudeTitle(parsed.records, bounded.turns),
+		cwd,
+		branch: sessionBranch(parsed.records),
+		updatedAtMs: updated,
+		createdAtMs: created,
+		source: "claude-code",
+		path,
+		turns: bounded.turns,
+		warnings,
+	});
+}
+
+function matchesCwd(session: SessionSummary, cwd: string): boolean {
+	return !session.cwd || cwdWithin(session.cwd, cwd);
+}
+
+function listClaude(options: ReaderOptions): SessionSummary[] {
+	const projects = join(claudeHome(options.home), "projects");
+	const files = projectDirs(projects, options.cwd).flatMap(sessionFiles);
+	const sessions: SessionSummary[] = [];
+	const seen = new Set<string>();
+	for (const file of files) {
+		const parsed = parseSession(file, options);
+		if (!parsed || seen.has(parsed.sessionId) || !matchesCwd(parsed, options.cwd)) continue;
+		seen.add(parsed.sessionId);
+		sessions.push(parsed);
+	}
+	return sessions.sort((a, b) => (b.updatedAtMs ?? 0) - (a.updatedAtMs ?? 0));
+}
+
+function showClaude(ref: string, options: ReaderOptions): ShowResult {
+	const trimmed = ref.trim();
+	if (looksLikePath(trimmed)) {
+		const session = parseSession(trimmed.replace(/^~/, homedir()), options);
+		if (!session) return { ok: false, message: `Could not read Claude session at ${trimmed}` };
+		return { ok: true, session };
+	}
+	const sessions = listClaude(options);
+	if (sessions.length === 0) {
+		return { ok: false, message: `No Claude Code sessions found for ${options.cwd}` };
+	}
+	if (!trimmed || isLatestRef(trimmed)) {
+		const newest = sessions[0];
+		const session = parseSession(newest.path, options);
+		if (!session) return { ok: false, message: `Could not read Claude session ${newest.sessionId}` };
+		return { ok: true, session };
+	}
+	if (isUuid(trimmed)) {
+		const match = sessions.find((session) => session.sessionId.toLowerCase() === trimmed.toLowerCase());
+		if (!match) return { ok: false, message: `No Claude session matched id ${trimmed}` };
+		const session = parseSession(match.path, options);
+		if (!session) return { ok: false, message: `Could not read Claude session ${trimmed}` };
+		return { ok: true, session };
+	}
+	const query = trimmed.toLowerCase();
+	const matches = sessions.filter(
+		(session) =>
+			session.sessionId.toLowerCase().includes(query) || (session.title ?? "").toLowerCase().includes(query),
+	);
+	if (matches.length === 1) {
+		const session = parseSession(matches[0].path, options);
+		if (!session) return { ok: false, message: `Could not read Claude session ${matches[0].sessionId}` };
+		return { ok: true, session };
+	}
+	if (matches.length === 0) return { ok: false, message: `No Claude session matched "${trimmed}"` };
+	return { ok: false, message: `Multiple Claude sessions matched "${trimmed}"`, matches };
+}
+
+export const claudeReader: SessionReader = {
+	harness: "claude",
+	label: "Claude Code",
+	async list(options) {
+		return listClaude(options);
+	},
+	async show(ref, options) {
+		return showClaude(ref, options);
+	},
+};
