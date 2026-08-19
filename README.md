@@ -71,8 +71,10 @@ Headless mode has no picker. It prints session ids so you can resume by id.
 | `/resume-cursor` | `~/.cursor/projects/<encoded>/agent-transcripts/` and `~/.cursor/chats/` | `CURSOR_HOME` |
 | `/resume-codex` | `~/.codex/sessions/**/rollout-*.jsonl` | `CODEX_HOME` |
 
-Sessions are filtered to the current working directory. Subdirectory and
-ancestor project folders are included when the on-disk layout encodes them.
+Sessions are filtered to the current working directory. `$HOME` is not treated
+as a match for every project underneath it. Subdirectory and ancestor project
+folders are included when you are already inside a real project. Cursor Desktop
+`<user_query>` wrappers are stripped so titles are the visible prompt.
 
 Readers never invoke the source CLI. They only read local files.
 
