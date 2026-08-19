@@ -4,14 +4,17 @@
   "description": "Resume Claude Code, Cursor, and Codex sessions inside Pi via /resume-claude, /resume-cursor, /resume-codex, and /resume-foreign",
   "type": "module",
   "license": "MIT",
-  "author": "Sachin Duhan",
+  "author": {
+    "name": "Sachin Duhan",
+    "url": "https://github.com/SachinD6"
+  },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sachind6/pi-resume.git"
+    "url": "git+https://github.com/SachinD6/pi-resume-harness.git"
   },
-  "homepage": "https://github.com/sachind6/pi-resume#readme",
+  "homepage": "https://github.com/SachinD6/pi-resume-harness#readme",
   "bugs": {
-    "url": "https://github.com/sachind6/pi-resume/issues"
+    "url": "https://github.com/SachinD6/pi-resume-harness/issues"
   },
   "keywords": [
     "pi-package",

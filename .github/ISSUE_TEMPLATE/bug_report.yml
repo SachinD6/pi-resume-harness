@@ -1,0 +1,54 @@
+name: Bug report
+description: Something in a resume command or reader is wrong
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Do not paste a real transcript. Use a synthetic
+        snippet or describe the store layout instead.
+  - type: dropdown
+    id: command
+    attributes:
+      label: Command
+      options:
+        - /resume-claude
+        - /resume-cursor
+        - /resume-codex
+        - /resume-foreign
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Package version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: pi-version
+    attributes:
+      label: Pi version
+      placeholder: output of `pi --version`
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Synthetic fixture, store layout, or exact args. No real chat logs.
+    validations:
+      required: true

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report
+    url: https://github.com/SachinD6/pi-resume-harness/security/advisories/new
+    about: Report a vulnerability privately. Do not file a public issue.
+  - name: Pi docs
+    url: https://pi.dev
+    about: Questions about Pi itself, not this package.
