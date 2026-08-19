@@ -23,8 +23,23 @@ export function cwdWithin(candidate: string | null | undefined, target: string):
 	return a === b || a.startsWith(`${b}${sep}`) || b.startsWith(`${a}${sep}`);
 }
 
+/** Walk parents until $HOME or `/`. Used to find a repo-root session from a subdir. */
+export function ancestorProjectCwds(cwd: string): string[] {
+	const home = homedir();
+	const out: string[] = [];
+	let parent = normalizeCwd(cwd);
+	while (true) {
+		const slash = parent.lastIndexOf("/");
+		const next = slash <= 0 ? "/" : parent.slice(0, slash);
+		if (next === parent || next === "/" || next === home) break;
+		parent = next;
+		out.push(parent);
+	}
+	return out;
+}
+
 /** Exact cwd, or a nested project path. Never treat $HOME/`/` as covering every child. */
-export function cursorCwdMatches(sessionCwd: string | null | undefined, queryCwd: string): boolean {
+export function projectCwdMatches(sessionCwd: string | null | undefined, queryCwd: string): boolean {
 	if (!sessionCwd) return false;
 	const session = normalizeCwd(sessionCwd);
 	const query = normalizeCwd(queryCwd);

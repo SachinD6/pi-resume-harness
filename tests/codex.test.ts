@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { codexReader } from "../src/readers/codex.ts";
@@ -60,5 +61,30 @@ test("codex list filters rollout files by session_meta cwd", async () => {
 		assert.equal(shown.session.turns.some((turn) => turn.toolCalls?.[0]?.name === "exec_command"), true);
 		assert.equal(shown.session.turns.some((turn) => turn.role === "tool"), true);
 		assert.equal(shown.session.branch, "dev");
+	}
+});
+
+test("codex list from $HOME does not swallow every project", async () => {
+	const projectCwd = join(homedir(), "Desktop/Work/codex-app");
+	const home = tempDir("pi-resume-codex-home-");
+	const id = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+	writeJsonl(join(home, "sessions", "2026", "08", "01", `rollout-2026-08-01T11-00-00-${id}.jsonl`), [
+		{
+			timestamp: "2026-08-01T11:00:00.000Z",
+			type: "session_meta",
+			payload: { id, cwd: projectCwd },
+		},
+		{
+			type: "event_msg",
+			payload: { type: "user_message", message: "<user_query>write tests</user_query>" },
+		},
+	]);
+	const fromHome = await codexReader.list({ cwd: homedir(), home });
+	assert.equal(fromHome.length, 0);
+	const fromProject = await codexReader.show("latest", { cwd: projectCwd, home });
+	assert.equal(fromProject.ok, true);
+	if (fromProject.ok) {
+		assert.equal(fromProject.session.cwd, projectCwd);
+		assert.equal(fromProject.session.lastUserRequest, "write tests");
 	}
 });

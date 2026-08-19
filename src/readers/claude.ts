@@ -1,10 +1,18 @@
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
-import { cwdWithin, isLatestRef, isUuid, looksLikePath, normalizeCwd, slugifyClaude } from "../cwd.ts";
+import { dirname, join } from "node:path";
+import {
+	ancestorProjectCwds,
+	isBroadRoot,
+	isLatestRef,
+	isUuid,
+	looksLikePath,
+	projectCwdMatches,
+	slugifyClaude,
+} from "../cwd.ts";
 import { isoToMs, mtimeMs, readJsonl, type JsonRecord } from "../jsonl.ts";
 import { asShow, boundTurns, titleFromTurns } from "../signals.ts";
-import { blocks, clip, jsonPreview, oneLine } from "../text.ts";
+import { blocks, clip, jsonPreview, oneLine, visibleUserText } from "../text.ts";
 import {
 	DEFAULT_MAX_TEXT_CHARS,
 	DEFAULT_MAX_TOOL_CHARS,
@@ -36,19 +44,15 @@ function projectDirs(projectsRoot: string, cwd: string): string[] {
 		if (existsSync(path)) found.add(path);
 	};
 	add(expected);
-	try {
-		for (const entry of readdirSync(projectsRoot, { withFileTypes: true })) {
-			if (entry.isDirectory() && entry.name.startsWith(`${expected}-`)) add(entry.name);
+	if (!isBroadRoot(cwd)) {
+		try {
+			for (const entry of readdirSync(projectsRoot, { withFileTypes: true })) {
+				if (entry.isDirectory() && entry.name.startsWith(`${expected}-`)) add(entry.name);
+			}
+		} catch {
+			// ignore unreadable project trees
 		}
-	} catch {
-		// ignore unreadable project trees
-	}
-	let parent = normalizeCwd(cwd);
-	while (parent !== "/") {
-		const next = parent.slice(0, parent.lastIndexOf("/")) || "/";
-		if (next === parent) break;
-		parent = next;
-		add(slugifyClaude(parent));
+		for (const parent of ancestorProjectCwds(cwd)) add(slugifyClaude(parent));
 	}
 	return [...found];
 }
@@ -78,15 +82,8 @@ function userDisplayText(content: unknown, maxText: number): string | null {
 	}
 	const raw = texts.join("\n").trim();
 	if (!raw) return null;
-	const command = raw.match(/<command-name>\s*([^<]+?)\s*<\/command-name>/i);
-	if (command) {
-		const args = raw.match(/<command-args>\s*([^<]*?)\s*<\/command-args>/i);
-		const name = command[1].trim();
-		const argText = args?.[1]?.trim();
-		return oneLine(argText ? `${name} ${argText}` : name, maxText);
-	}
-	if (/^\s*</.test(raw) || /^\s*\[Request interrupted by user/i.test(raw)) return null;
-	return clip(raw, maxText);
+	const visible = visibleUserText(raw);
+	return visible ? oneLine(visible, maxText) : null;
 }
 
 function renderTurn(record: JsonRecord, maxText: number, maxTool: number): Turn | null {
@@ -106,7 +103,9 @@ function renderTurn(record: JsonRecord, maxText: number, maxTool: number): Turn 
 		const type = block.type;
 		if (type === "thinking" || type === "redacted_thinking" || type === "signature") continue;
 		if (type === "text" || type === "input_text" || type === "output_text") {
-			if (typeof block.text === "string" && block.text.trim()) texts.push(clip(block.text, maxText));
+			if (typeof block.text !== "string" || !block.text.trim()) continue;
+			const rendered = role === "user" ? visibleUserText(block.text) : block.text;
+			if (rendered) texts.push(clip(rendered, maxText));
 		} else if (type === "tool_use") {
 			toolCalls.push({
 				id: typeof block.id === "string" ? block.id : undefined,
@@ -150,7 +149,9 @@ function claudeTitle(records: JsonRecord[], turns: Turn[]): string | null {
 	}
 	for (const [type] of fields) {
 		const value = newest.get(type);
-		if (value) return oneLine(value, 200);
+		if (!value) continue;
+		const visible = visibleUserText(value) ?? value;
+		if (visible.trim()) return oneLine(visible, 200);
 	}
 	for (const record of [...records].reverse()) {
 		if (record.type !== "user" || skipRecord(record)) continue;
@@ -230,18 +231,21 @@ function parseSession(path: string, options: ReaderOptions): SessionShow | null 
 	});
 }
 
-function matchesCwd(session: SessionSummary, cwd: string): boolean {
-	return !session.cwd || cwdWithin(session.cwd, cwd);
+function matchesCwd(session: SessionSummary, cwd: string, fromExpectedSlug: boolean): boolean {
+	if (session.cwd) return projectCwdMatches(session.cwd, cwd);
+	return fromExpectedSlug;
 }
 
 function listClaude(options: ReaderOptions): SessionSummary[] {
 	const projects = join(claudeHome(options.home), "projects");
+	const expectedDir = join(projects, slugifyClaude(options.cwd));
 	const files = projectDirs(projects, options.cwd).flatMap(sessionFiles);
 	const sessions: SessionSummary[] = [];
 	const seen = new Set<string>();
 	for (const file of files) {
 		const parsed = parseSession(file, options);
-		if (!parsed || seen.has(parsed.sessionId) || !matchesCwd(parsed, options.cwd)) continue;
+		const fromExpected = dirname(file) === expectedDir;
+		if (!parsed || seen.has(parsed.sessionId) || !matchesCwd(parsed, options.cwd, fromExpected)) continue;
 		seen.add(parsed.sessionId);
 		sessions.push(parsed);
 	}

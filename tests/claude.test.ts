@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { slugifyClaude } from "../src/cwd.ts";
@@ -123,5 +124,35 @@ test("claude skips sidechain and meta records", async () => {
 	if (shown.ok) {
 		assert.equal(shown.session.turns.length, 1);
 		assert.equal(shown.session.turns[0].text, "Real prompt");
+	}
+});
+
+test("claude list from $HOME does not swallow every project", async () => {
+	const projectCwd = join(homedir(), "Desktop/Work/demo-app");
+	const home = tempDir("pi-resume-claude-home-");
+	const id = "55555555-5555-4555-8555-555555555555";
+	writeJsonl(join(home, "projects", slugifyClaude(projectCwd), `${id}.jsonl`), [
+		{
+			type: "user",
+			cwd: projectCwd,
+			message: {
+				role: "user",
+				content: [
+					{
+						type: "text",
+						text: "<user_query>\nfix the login redirect\n</user_query>",
+					},
+				],
+			},
+		},
+	]);
+	const fromHome = await claudeReader.list({ cwd: homedir(), home });
+	assert.equal(fromHome.length, 0);
+	const fromProject = await claudeReader.show("latest", { cwd: projectCwd, home });
+	assert.equal(fromProject.ok, true);
+	if (fromProject.ok) {
+		assert.equal(fromProject.session.cwd, projectCwd);
+		assert.equal(fromProject.session.lastUserRequest, "fix the login redirect");
+		assert.equal(fromProject.session.title, "fix the login redirect");
 	}
 });
