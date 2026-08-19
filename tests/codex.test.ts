@@ -88,3 +88,22 @@ test("codex list from $HOME does not swallow every project", async () => {
 		assert.equal(fromProject.session.lastUserRequest, "write tests");
 	}
 });
+
+test("codex list skips rollouts with no recoverable cwd", async () => {
+	const cwd = "/tmp/codex-app";
+	const home = tempDir("pi-resume-codex-nocwd-");
+	const id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+	writeJsonl(join(home, "sessions", "2026", "08", "01", `rollout-2026-08-01T12-00-00-${id}.jsonl`), [
+		{
+			timestamp: "2026-08-01T12:00:00.000Z",
+			type: "session_meta",
+			payload: { id },
+		},
+		{
+			type: "event_msg",
+			payload: { type: "user_message", message: "orphan rollout" },
+		},
+	]);
+	const listed = await codexReader.list({ cwd, home });
+	assert.equal(listed.length, 0);
+});

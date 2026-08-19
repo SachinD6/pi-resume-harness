@@ -83,6 +83,11 @@ test("visibleUserText unwraps Desktop user_query wrappers", () => {
 	);
 	assert.equal(visibleUserText("<timestamp>now</timestamp>"), null);
 	assert.equal(visibleUserText("Add dark mode"), "Add dark mode");
+	assert.equal(visibleUserText("<command-name>/review</command-name>"), "/review");
+	assert.equal(
+		visibleUserText("<command-name>review</command-name>\n<command-args>the auth module</command-args>"),
+		"review the auth module",
+	);
 });
 
 test("cursor list from $HOME does not swallow every project", async () => {

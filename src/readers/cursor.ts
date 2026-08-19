@@ -2,13 +2,11 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
-	ancestorProjectCwds,
 	encodeCursorProject,
-	isBroadRoot,
 	isLatestRef,
 	isUuid,
 	looksLikePath,
-	normalizeCwd,
+	matchEncodedProjectNames,
 	projectCwdMatches,
 } from "../cwd.ts";
 import { isoToMs, mtimeMs, readJsonl, type JsonRecord } from "../jsonl.ts";
@@ -36,28 +34,17 @@ function cursorHome(home?: string): string {
 
 function matchingProjectDirs(projectsRoot: string, cwd: string): Array<{ dir: string; cwd: string | null }> {
 	if (!existsSync(projectsRoot)) return [];
-	const encoded = encodeCursorProject(cwd);
-	const encodedAncestors = new Map(ancestorProjectCwds(cwd).map((path) => [encodeCursorProject(path), path]));
-	const matches: Array<{ dir: string; cwd: string | null }> = [];
 	try {
-		for (const entry of readdirSync(projectsRoot, { withFileTypes: true })) {
-			if (!entry.isDirectory()) continue;
-			if (entry.name === encoded) {
-				matches.push({ dir: join(projectsRoot, entry.name), cwd: normalizeCwd(cwd) });
-				continue;
-			}
-			// Subdirectory project folders (`<cwd-slug>-src`), but never every project under $HOME.
-			if (!isBroadRoot(cwd) && entry.name.startsWith(`${encoded}-`)) {
-				matches.push({ dir: join(projectsRoot, entry.name), cwd: normalizeCwd(cwd) });
-				continue;
-			}
-			const ancestor = encodedAncestors.get(entry.name);
-			if (ancestor) matches.push({ dir: join(projectsRoot, entry.name), cwd: ancestor });
-		}
+		const names = readdirSync(projectsRoot, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+		return matchEncodedProjectNames(names, cwd, encodeCursorProject).map((match) => ({
+			dir: join(projectsRoot, match.name),
+			cwd: match.cwd,
+		}));
 	} catch {
-		// ignore unreadable project trees
+		return [];
 	}
-	return matches;
 }
 
 function transcriptFiles(projectDir: string): string[] {

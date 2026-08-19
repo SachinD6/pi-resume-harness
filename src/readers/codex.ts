@@ -225,8 +225,8 @@ function listCodex(options: ReaderOptions): SessionSummary[] {
 	for (const file of files) {
 		const probe = probeRollout(file);
 		if (!probe) continue;
-		if (probe.cwd && !projectCwdMatches(probe.cwd, options.cwd)) continue;
-		if (!probe.cwd) continue;
+		// Grok-parity: a rollout with no recoverable cwd is not listed or taken as latest.
+		if (!probe.cwd || !projectCwdMatches(probe.cwd, options.cwd)) continue;
 		const parsed = parseRollout(file, options);
 		if (!parsed) continue;
 		sessions.push(parsed);

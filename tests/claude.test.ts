@@ -156,3 +156,25 @@ test("claude list from $HOME does not swallow every project", async () => {
 		assert.equal(fromProject.session.title, "fix the login redirect");
 	}
 });
+
+test("claude unwraps slash-command XML into the title", async () => {
+	const cwd = "/tmp/slash-app";
+	const home = tempDir("pi-resume-claude-slash-");
+	const id = "66666666-6666-4666-8666-666666666666";
+	writeJsonl(join(home, "projects", slugifyClaude(cwd), `${id}.jsonl`), [
+		{
+			type: "user",
+			cwd,
+			message: {
+				role: "user",
+				content: "<command-name>review</command-name>\n<command-args>the auth module</command-args>",
+			},
+		},
+	]);
+	const shown = await claudeReader.show("latest", { cwd, home });
+	assert.equal(shown.ok, true);
+	if (shown.ok) {
+		assert.equal(shown.session.title, "review the auth module");
+		assert.equal(shown.session.lastUserRequest, "review the auth module");
+	}
+});

@@ -2,11 +2,10 @@ import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
-	ancestorProjectCwds,
-	isBroadRoot,
 	isLatestRef,
 	isUuid,
 	looksLikePath,
+	matchEncodedProjectNames,
 	projectCwdMatches,
 	slugifyClaude,
 } from "../cwd.ts";
@@ -37,24 +36,14 @@ function claudeHome(home?: string): string {
 
 function projectDirs(projectsRoot: string, cwd: string): string[] {
 	if (!existsSync(projectsRoot)) return [];
-	const expected = slugifyClaude(cwd);
-	const found = new Set<string>();
-	const add = (name: string) => {
-		const path = join(projectsRoot, name);
-		if (existsSync(path)) found.add(path);
-	};
-	add(expected);
-	if (!isBroadRoot(cwd)) {
-		try {
-			for (const entry of readdirSync(projectsRoot, { withFileTypes: true })) {
-				if (entry.isDirectory() && entry.name.startsWith(`${expected}-`)) add(entry.name);
-			}
-		} catch {
-			// ignore unreadable project trees
-		}
-		for (const parent of ancestorProjectCwds(cwd)) add(slugifyClaude(parent));
+	try {
+		const names = readdirSync(projectsRoot, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+		return matchEncodedProjectNames(names, cwd, slugifyClaude).map((match) => join(projectsRoot, match.name));
+	} catch {
+		return [];
 	}
-	return [...found];
 }
 
 function sessionFiles(dir: string): string[] {
