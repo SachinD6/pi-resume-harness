@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { encodeCursorProject, slugifyClaude } from "../src/cwd.ts";
@@ -79,4 +80,13 @@ test("filterSessions matches harness, title, and id", () => {
 	assert.equal(filterSessions(sessions, "auth")[0]?.harness, "claude");
 	assert.equal(filterSessions(sessions, "cursor")[0]?.harness, "cursor");
 	assert.equal(filterSessions(sessions, CLAUDE.slice(0, 8))[0]?.sessionId, CLAUDE);
+});
+
+test("foreign latest from $HOME does not pick another project's session", async () => {
+	const projectCwd = join(homedir(), "Desktop/Work/foreign-app");
+	const root = homes(projectCwd);
+	const fromHome = await resolveRef(["claude"], "latest", { cwd: homedir(), home: join(root, "claude") });
+	assert.equal(fromHome.ok, false);
+	const fromProject = await resolveRef(["claude"], "latest", { cwd: projectCwd, home: join(root, "claude") });
+	assert.equal(fromProject.ok, true);
 });

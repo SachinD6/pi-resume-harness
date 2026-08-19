@@ -2,17 +2,16 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
-	cursorCwdMatches,
 	encodeCursorProject,
-	isBroadRoot,
 	isLatestRef,
 	isUuid,
 	looksLikePath,
-	normalizeCwd,
+	matchEncodedProjectNames,
+	projectCwdMatches,
 } from "../cwd.ts";
 import { isoToMs, mtimeMs, readJsonl, type JsonRecord } from "../jsonl.ts";
 import { asShow, boundTurns, titleFromTurns } from "../signals.ts";
-import { blocks, clip, cursorUserText, jsonPreview, oneLine } from "../text.ts";
+import { blocks, clip, jsonPreview, oneLine, visibleUserText } from "../text.ts";
 import {
 	DEFAULT_MAX_TEXT_CHARS,
 	DEFAULT_MAX_TOOL_CHARS,
@@ -33,44 +32,19 @@ function cursorHome(home?: string): string {
 	return join(homedir(), ".cursor");
 }
 
-function ancestorCwds(cwd: string): string[] {
-	const home = homedir();
-	const out: string[] = [];
-	let parent = normalizeCwd(cwd);
-	while (true) {
-		const slash = parent.lastIndexOf("/");
-		const next = slash <= 0 ? "/" : parent.slice(0, slash);
-		if (next === parent || next === "/" || next === home) break;
-		parent = next;
-		out.push(parent);
-	}
-	return out;
-}
-
 function matchingProjectDirs(projectsRoot: string, cwd: string): Array<{ dir: string; cwd: string | null }> {
 	if (!existsSync(projectsRoot)) return [];
-	const encoded = encodeCursorProject(cwd);
-	const encodedAncestors = new Map(ancestorCwds(cwd).map((path) => [encodeCursorProject(path), path]));
-	const matches: Array<{ dir: string; cwd: string | null }> = [];
 	try {
-		for (const entry of readdirSync(projectsRoot, { withFileTypes: true })) {
-			if (!entry.isDirectory()) continue;
-			if (entry.name === encoded) {
-				matches.push({ dir: join(projectsRoot, entry.name), cwd: normalizeCwd(cwd) });
-				continue;
-			}
-			// Subdirectory project folders (`<cwd-slug>-src`), but never every project under $HOME.
-			if (!isBroadRoot(cwd) && entry.name.startsWith(`${encoded}-`)) {
-				matches.push({ dir: join(projectsRoot, entry.name), cwd: normalizeCwd(cwd) });
-				continue;
-			}
-			const ancestor = encodedAncestors.get(entry.name);
-			if (ancestor) matches.push({ dir: join(projectsRoot, entry.name), cwd: ancestor });
-		}
+		const names = readdirSync(projectsRoot, { withFileTypes: true })
+			.filter((entry) => entry.isDirectory())
+			.map((entry) => entry.name);
+		return matchEncodedProjectNames(names, cwd, encodeCursorProject).map((match) => ({
+			dir: join(projectsRoot, match.name),
+			cwd: match.cwd,
+		}));
 	} catch {
-		// ignore unreadable project trees
+		return [];
 	}
-	return matches;
 }
 
 function transcriptFiles(projectDir: string): string[] {
@@ -107,7 +81,7 @@ function renderCursorRecord(record: JsonRecord, maxText: number, maxTool: number
 		const type = block.type;
 		if (type === "text" || type === "input_text" || type === "output_text" || !type) {
 			if (typeof block.text !== "string" || !block.text.trim()) continue;
-			const rendered = role === "user" ? cursorUserText(block.text) : block.text;
+			const rendered = role === "user" ? visibleUserText(block.text) : block.text;
 			if (rendered) texts.push(clip(rendered, maxText));
 		} else if (type === "tool_use" || type === "tool_call") {
 			toolCalls.push({
@@ -125,7 +99,7 @@ function renderCursorRecord(record: JsonRecord, maxText: number, maxTool: number
 		}
 	}
 	if (typeof content === "string" && content.trim()) {
-		const rendered = role === "user" ? cursorUserText(content) : content;
+		const rendered = role === "user" ? visibleUserText(content) : content;
 		if (rendered) texts.push(clip(rendered, maxText));
 	}
 	if (role === "tool" && typeof record.tool_name === "string") {
@@ -215,7 +189,7 @@ function cliChatSessions(root: string, cwd: string, options: ReaderOptions): Ses
 						// ignore bad metadata
 					}
 				}
-				if (!metaCwd || !cursorCwdMatches(metaCwd, cwd)) continue;
+				if (!metaCwd || !projectCwdMatches(metaCwd, cwd)) continue;
 				const transcriptDir = join(dir, "transcripts");
 				const files = existsSync(transcriptDir)
 					? readdirSync(transcriptDir)

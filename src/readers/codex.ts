@@ -1,10 +1,10 @@
 import { existsSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
-import { cwdWithin, isLatestRef, isUuid, looksLikePath } from "../cwd.ts";
+import { isLatestRef, isUuid, looksLikePath, projectCwdMatches } from "../cwd.ts";
 import { isoToMs, mtimeMs, readJsonl, readJsonlHead, type JsonRecord } from "../jsonl.ts";
 import { asShow, boundTurns, titleFromTurns } from "../signals.ts";
-import { clip, jsonPreview, oneLine } from "../text.ts";
+import { clip, jsonPreview, oneLine, visibleUserText } from "../text.ts";
 import {
 	DEFAULT_MAX_TEXT_CHARS,
 	DEFAULT_MAX_TOOL_CHARS,
@@ -71,10 +71,10 @@ function sessionMeta(records: JsonRecord[]): JsonRecord | null {
 	return null;
 }
 
-function textFromPayload(payload: JsonRecord, maxText: number): string {
-	if (typeof payload.message === "string") return clip(payload.message, maxText);
-	if (typeof payload.text === "string") return clip(payload.text, maxText);
-	if (typeof payload.content === "string") return clip(payload.content, maxText);
+function textFromPayload(payload: JsonRecord): string {
+	if (typeof payload.message === "string") return payload.message;
+	if (typeof payload.text === "string") return payload.text;
+	if (typeof payload.content === "string") return payload.content;
 	if (Array.isArray(payload.content)) {
 		return payload.content
 			.map((item) => {
@@ -85,7 +85,6 @@ function textFromPayload(payload: JsonRecord, maxText: number): string {
 				return "";
 			})
 			.filter(Boolean)
-			.map((text) => clip(text, maxText))
 			.join("\n");
 	}
 	return "";
@@ -97,12 +96,13 @@ function renderCodexRecord(record: JsonRecord, maxText: number, maxTool: number)
 	if (outer === "event_msg") {
 		const kind = payload.type;
 		if (kind === "user_message") {
-			const text = textFromPayload(payload, maxText);
-			return text ? { role: "user", text } : null;
+			const raw = textFromPayload(payload);
+			const text = raw ? visibleUserText(raw) : null;
+			return text ? { role: "user", text: clip(text, maxText) } : null;
 		}
 		if (kind === "agent_message" || kind === "assistant_message") {
-			const text = textFromPayload(payload, maxText);
-			return text ? { role: "assistant", text } : null;
+			const text = textFromPayload(payload);
+			return text ? { role: "assistant", text: clip(text, maxText) } : null;
 		}
 		return null;
 	}
@@ -110,8 +110,9 @@ function renderCodexRecord(record: JsonRecord, maxText: number, maxTool: number)
 		const kind = payload.type;
 		if (kind === "message") {
 			const role = payload.role === "user" ? "user" : "assistant";
-			const text = textFromPayload(payload, maxText);
-			return text ? { role, text } : null;
+			const raw = textFromPayload(payload);
+			const text = role === "user" && raw ? visibleUserText(raw) : raw;
+			return text ? { role, text: clip(text, maxText) } : null;
 		}
 		if (kind === "function_call") {
 			return {
@@ -223,8 +224,8 @@ function listCodex(options: ReaderOptions): SessionSummary[] {
 	for (const file of files) {
 		const probe = probeRollout(file);
 		if (!probe) continue;
-		if (probe.cwd && !cwdWithin(probe.cwd, options.cwd)) continue;
-		if (!probe.cwd) continue;
+		// Grok-parity: a rollout with no recoverable cwd is not listed or taken as latest.
+		if (!probe.cwd || !projectCwdMatches(probe.cwd, options.cwd)) continue;
 		const parsed = parseRollout(file, options);
 		if (!parsed) continue;
 		sessions.push(parsed);

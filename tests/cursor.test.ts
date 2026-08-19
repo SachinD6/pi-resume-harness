@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { encodeCursorProject } from "../src/cwd.ts";
 import { cursorReader } from "../src/readers/cursor.ts";
-import { cursorUserText } from "../src/text.ts";
+import { visibleUserText } from "../src/text.ts";
 import { tempDir, writeJson, writeJsonl } from "./helpers.ts";
 
 const SESSION = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
@@ -74,15 +74,20 @@ test("cursor cli chats use metadata cwd", async () => {
 	assert.equal(listed[0].source, "cursor-cli-chat");
 });
 
-test("cursorUserText unwraps Desktop user_query wrappers", () => {
+test("visibleUserText unwraps Desktop user_query wrappers", () => {
 	assert.equal(
-		cursorUserText(
+		visibleUserText(
 			"<timestamp>Wednesday, Aug 19, 2026, 11:23 PM (UTC+5:30)</timestamp>\n<user_query>\nhey\n</user_query>",
 		),
 		"hey",
 	);
-	assert.equal(cursorUserText("<timestamp>now</timestamp>"), null);
-	assert.equal(cursorUserText("Add dark mode"), "Add dark mode");
+	assert.equal(visibleUserText("<timestamp>now</timestamp>"), null);
+	assert.equal(visibleUserText("Add dark mode"), "Add dark mode");
+	assert.equal(visibleUserText("<command-name>/review</command-name>"), "/review");
+	assert.equal(
+		visibleUserText("<command-name>review</command-name>\n<command-args>the auth module</command-args>"),
+		"review the auth module",
+	);
 });
 
 test("cursor list from $HOME does not swallow every project", async () => {
