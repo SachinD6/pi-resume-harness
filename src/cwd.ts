@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { resolve, sep } from "node:path";
+import { posix, resolve, win32, type PlatformPath } from "node:path";
 
 export function expandHome(value: string): string {
 	if (value === "~") return homedir();
@@ -11,34 +11,70 @@ export function normalizeCwd(cwd: string): string {
 	return resolve(expandHome(cwd));
 }
 
+function pathApi(cwd: string): PlatformPath {
+	return looksWindowsPath(cwd) ? win32 : posix;
+}
+
+export function looksWindowsPath(cwd: string): boolean {
+	return /^[A-Za-z]:[\\/]/.test(cwd) || cwd.startsWith("\\\\");
+}
+
+export function filesystemRoot(cwd: string): string {
+	const api = pathApi(cwd);
+	return api.parse(api.normalize(cwd)).root;
+}
+
+export function isBroadRootFrom(cwd: string, home: string): boolean {
+	const api = pathApi(cwd);
+	const start = api.normalize(cwd);
+	return start === api.normalize(home) || start === api.parse(start).root;
+}
+
 export function isBroadRoot(cwd: string): boolean {
-	const normalized = normalizeCwd(cwd);
-	return normalized === homedir() || normalized === "/";
+	return isBroadRootFrom(normalizeCwd(cwd), homedir());
+}
+
+/** Walk parents until $HOME or the filesystem root. Empty for those roots. */
+export function ancestorsOf(cwd: string, home: string): string[] {
+	const api = pathApi(cwd);
+	const start = api.normalize(cwd);
+	const homeNorm = pathApi(home).normalize(home);
+	const root = api.parse(start).root;
+	if (!start || start === homeNorm || start === root) return [];
+	const out: string[] = [];
+	let current = start;
+	while (true) {
+		const next = api.dirname(current);
+		if (next === current || next === root || next === homeNorm) break;
+		current = next;
+		out.push(current);
+	}
+	return out;
 }
 
 /** Walk parents until $HOME or `/`. Used to find a repo-root session from a subdir. */
 export function ancestorProjectCwds(cwd: string): string[] {
-	const home = homedir();
-	const out: string[] = [];
-	let parent = normalizeCwd(cwd);
-	while (true) {
-		const slash = parent.lastIndexOf("/");
-		const next = slash <= 0 ? "/" : parent.slice(0, slash);
-		if (next === parent || next === "/" || next === home) break;
-		parent = next;
-		out.push(parent);
-	}
-	return out;
+	return ancestorsOf(normalizeCwd(cwd), homedir());
+}
+
+export function projectCwdMatchesFrom(
+	sessionCwd: string,
+	queryCwd: string,
+	home: string,
+): boolean {
+	const api = pathApi(queryCwd);
+	const session = api.normalize(sessionCwd);
+	const query = api.normalize(queryCwd);
+	if (session === query) return true;
+	if (isBroadRootFrom(session, home) || isBroadRootFrom(query, home)) return false;
+	const divider = api.sep;
+	return session.startsWith(`${query}${divider}`) || query.startsWith(`${session}${divider}`);
 }
 
 /** Exact cwd, or a nested project path. Never treat $HOME/`/` as covering every child. */
 export function projectCwdMatches(sessionCwd: string | null | undefined, queryCwd: string): boolean {
 	if (!sessionCwd) return false;
-	const session = normalizeCwd(sessionCwd);
-	const query = normalizeCwd(queryCwd);
-	if (session === query) return true;
-	if (isBroadRoot(session) || isBroadRoot(query)) return false;
-	return session.startsWith(`${query}${sep}`) || query.startsWith(`${session}${sep}`);
+	return projectCwdMatchesFrom(normalizeCwd(sessionCwd), normalizeCwd(queryCwd), homedir());
 }
 
 export type EncodedProjectMatch = { name: string; cwd: string };

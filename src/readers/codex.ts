@@ -71,10 +71,10 @@ function sessionMeta(records: JsonRecord[]): JsonRecord | null {
 	return null;
 }
 
-function textFromPayload(payload: JsonRecord, maxText: number): string {
-	if (typeof payload.message === "string") return clip(payload.message, maxText);
-	if (typeof payload.text === "string") return clip(payload.text, maxText);
-	if (typeof payload.content === "string") return clip(payload.content, maxText);
+function textFromPayload(payload: JsonRecord): string {
+	if (typeof payload.message === "string") return payload.message;
+	if (typeof payload.text === "string") return payload.text;
+	if (typeof payload.content === "string") return payload.content;
 	if (Array.isArray(payload.content)) {
 		return payload.content
 			.map((item) => {
@@ -85,7 +85,6 @@ function textFromPayload(payload: JsonRecord, maxText: number): string {
 				return "";
 			})
 			.filter(Boolean)
-			.map((text) => clip(text, maxText))
 			.join("\n");
 	}
 	return "";
@@ -97,13 +96,13 @@ function renderCodexRecord(record: JsonRecord, maxText: number, maxTool: number)
 	if (outer === "event_msg") {
 		const kind = payload.type;
 		if (kind === "user_message") {
-			const raw = textFromPayload(payload, maxText);
+			const raw = textFromPayload(payload);
 			const text = raw ? visibleUserText(raw) : null;
 			return text ? { role: "user", text: clip(text, maxText) } : null;
 		}
 		if (kind === "agent_message" || kind === "assistant_message") {
-			const text = textFromPayload(payload, maxText);
-			return text ? { role: "assistant", text } : null;
+			const text = textFromPayload(payload);
+			return text ? { role: "assistant", text: clip(text, maxText) } : null;
 		}
 		return null;
 	}
@@ -111,7 +110,7 @@ function renderCodexRecord(record: JsonRecord, maxText: number, maxTool: number)
 		const kind = payload.type;
 		if (kind === "message") {
 			const role = payload.role === "user" ? "user" : "assistant";
-			const raw = textFromPayload(payload, maxText);
+			const raw = textFromPayload(payload);
 			const text = role === "user" && raw ? visibleUserText(raw) : raw;
 			return text ? { role, text: clip(text, maxText) } : null;
 		}

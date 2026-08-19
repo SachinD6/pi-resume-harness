@@ -107,3 +107,28 @@ test("codex list skips rollouts with no recoverable cwd", async () => {
 	const listed = await codexReader.list({ cwd, home });
 	assert.equal(listed.length, 0);
 });
+
+test("codex unwraps user_query after a long prefix beyond maxText", async () => {
+	const cwd = "/tmp/codex-long";
+	const home = tempDir("pi-resume-codex-long-");
+	const id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+	const inner = "resume the parser work";
+	const padded = `<user_query>${"x".repeat(80)}${inner}</user_query>`;
+	writeJsonl(join(home, "sessions", "2026", "08", "01", `rollout-2026-08-01T13-00-00-${id}.jsonl`), [
+		{
+			timestamp: "2026-08-01T13:00:00.000Z",
+			type: "session_meta",
+			payload: { id, cwd },
+		},
+		{
+			type: "event_msg",
+			payload: { type: "user_message", message: padded },
+		},
+	]);
+	const shown = await codexReader.show("latest", { cwd, home, maxTextChars: 40 });
+	assert.equal(shown.ok, true);
+	if (shown.ok) {
+		assert.ok(!shown.session.lastUserRequest?.includes("<user_query>"));
+		assert.ok(shown.session.lastUserRequest?.includes("x".repeat(20)));
+	}
+});
