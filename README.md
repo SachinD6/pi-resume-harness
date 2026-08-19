@@ -14,6 +14,8 @@ Resume **Claude Code**, **Cursor**, and **Codex** sessions inside [Pi](https://p
 /resume-foreign
 ```
 
+![Pi command palette showing /resume-claude, /resume-cursor, /resume-codex, and /resume-foreign](docs/resume-commands.png)
+
 The extension scans that harness’s on-disk store, treats the transcript as
 **untrusted inert history**, injects a handoff prompt into the current Pi
 session, and lets the model summarize and continue.
