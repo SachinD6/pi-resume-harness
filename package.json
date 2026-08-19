@@ -33,6 +33,7 @@
     "extensions",
     "src",
     "skills",
+    "docs",
     "README.md",
     "LICENSE",
     "CHANGELOG.md"
@@ -42,7 +43,8 @@
   },
   "pi": {
     "extensions": ["./extensions/resume.ts"],
-    "skills": ["./skills"]
+    "skills": ["./skills"],
+    "image": "https://raw.githubusercontent.com/SachinD6/pi-resume-harness/main/docs/resume-commands.png"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*",

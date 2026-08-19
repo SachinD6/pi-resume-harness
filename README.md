@@ -24,16 +24,16 @@ This is a handoff, not a live restore. Foreign tool calls are not replayed.
 
 ## Install
 
-From git (works now):
-
-```bash
-pi install git:github.com/SachinD6/pi-resume-harness
-```
-
-From npm (after publish):
+From npm:
 
 ```bash
 pi install npm:pi-resume-harness
+```
+
+From git:
+
+```bash
+pi install git:github.com/SachinD6/pi-resume-harness
 ```
 
 From a local checkout:
