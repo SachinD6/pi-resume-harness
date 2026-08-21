@@ -4,6 +4,7 @@
 
 - `/resume-grok` — resume Grok CLI sessions from `~/.grok/sessions` (`GROK_HOME`)
 - Grok titles come from `summary.json`; system prompts and encrypted reasoning are never surfaced
+- `/copy` — export any foreign session handoff to the clipboard (pbcopy / clip / wl-copy / xclip / xsel, WSL `clip.exe`)
 - Windows-style session cwds recorded on another OS now match without host-path mangling
 - Grok `<user_info>` and `<git_status>` wrappers are stripped like Cursor/Claude wrappers
 

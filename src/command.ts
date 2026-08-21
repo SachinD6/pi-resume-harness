@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { copyText } from "./clipboard.ts";
 import { buildHandoffPrompt } from "./handoff.ts";
 import { pickSession, renderSessionList } from "./picker.ts";
 import { readers } from "./readers/index.ts";
@@ -95,6 +96,28 @@ export async function resumeHarness(
 	ctx.ui.notify(`Resuming ${session.harness} session: ${label}`, "info");
 }
 
+export async function copyHarness(
+	args: string,
+	ctx: ExtensionCommandContext,
+	harnesses: Harness[],
+): Promise<void> {
+	const session = await resolveForeignSession(args, ctx, harnesses);
+	if (!session) return;
+
+	const prompt = buildHandoffPrompt(session);
+	const label = session.title || session.sessionId;
+	const copied = copyText(prompt);
+
+	if (!copied.ok) {
+		ctx.ui.notify(
+			"Clipboard unavailable. Install wl-copy or xclip (Linux); pbcopy (macOS) and clip (Windows) are built in.",
+			"warning",
+		);
+		return;
+	}
+	ctx.ui.notify(`Copied ${session.harness} handoff (${label}) via ${copied.tool}`, "info");
+}
+
 export function registerResumeCommands(pi: ExtensionAPI): void {
 	const register = (name: string, description: string, harnesses: Harness[]) => {
 		pi.registerCommand(name, {
@@ -124,3 +147,22 @@ export function registerResumeCommands(pi: ExtensionAPI): void {
 	register("resume-grok", "Continue from a Grok session", ["grok"]);
 	register("resume-foreign", "Continue from a Claude, Cursor, Codex, or Grok session", [...HARNESSES]);
 
+	pi.registerCommand("copy", {
+		description: "Copy a foreign session handoff to the clipboard",
+		getArgumentCompletions: (prefix: string) => {
+			const items = COMPLETIONS.filter((value) => value.startsWith(prefix)).map((value) => ({
+				value,
+				label: value,
+			}));
+			return items.length > 0 ? items : null;
+		},
+		handler: async (args, ctx) => {
+			ctx.ui.setStatus("copy", "Building session handoff…");
+			try {
+				await copyHarness(args, ctx, [...HARNESSES]);
+			} finally {
+				ctx.ui.setStatus("copy", undefined);
+			}
+		},
+	});
+}
