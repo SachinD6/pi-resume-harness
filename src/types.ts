@@ -1,4 +1,4 @@
-export const HARNESSES = ["claude", "cursor", "codex"] as const;
+export const HARNESSES = ["claude", "cursor", "codex", "grok"] as const;
 
 export type Harness = (typeof HARNESSES)[number];
 
