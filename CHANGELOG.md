@@ -1,6 +1,10 @@
 # Changelog
 
-## 0.3.0
+## 0.4.0
+
+- Renamed `/copy` to `/copy-session` — the old name collided with the built-in
+  `/copy` (which copies pi's last agent message) and was skipped from
+  autocomplete. The command and its arguments are unchanged.
 
 - `/copy` now exports the full session transcript — every user and assistant message unclipped and untruncated, plus tool activity as previews capped at 2000 chars — as portable markdown with session metadata, ready to paste into any other coding agent; it no longer copies the Pi-only handoff prompt
 

@@ -149,7 +149,7 @@ export function registerResumeCommands(pi: ExtensionAPI): void {
 	register("resume-grok", "Continue from a Grok session", ["grok"]);
 	register("resume-foreign", "Continue from a Claude, Cursor, Codex, or Grok session", [...HARNESSES]);
 
-	pi.registerCommand("copy", {
+	pi.registerCommand("copy-session", {
 		description: "Copy a foreign session's full transcript to the clipboard",
 		getArgumentCompletions: (prefix: string) => {
 			const items = COMPLETIONS.filter((value) => value.startsWith(prefix)).map((value) => ({
@@ -159,11 +159,11 @@ export function registerResumeCommands(pi: ExtensionAPI): void {
 			return items.length > 0 ? items : null;
 		},
 		handler: async (args, ctx) => {
-			ctx.ui.setStatus("copy", "Building session transcript…");
+			ctx.ui.setStatus("copy-session", "Building session transcript…");
 			try {
 				await copyHarness(args, ctx, [...HARNESSES]);
 			} finally {
-				ctx.ui.setStatus("copy", undefined);
+				ctx.ui.setStatus("copy-session", undefined);
 			}
 		},
 	});

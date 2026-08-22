@@ -9,7 +9,7 @@ Left off in **Claude Code**, **Cursor**, **Codex**, or **Grok** — and want to
 keep going inside [Pi](https://pi.dev)?
 
 This extension reads those tools' saved sessions straight from disk, summarizes
-what happened, and continues the conversation in Pi. `/copy` puts that summary
+what happened, and continues the conversation in Pi. `/copy-session` puts that summary
 on your clipboard so you can paste it into any other agent or chat.
 
 This is a handoff, not a live restore: the old conversation is summarized and
@@ -21,7 +21,7 @@ carried forward, never replayed.
 /resume-codex    Resume a Codex session
 /resume-grok     Resume a Grok session
 /resume-foreign  Pick from all of the above in one list
-/copy            Copy the full session transcript to the clipboard
+/copy-session    Copy the full session transcript to the clipboard
 ```
 
 ![Pi command palette showing /resume-claude, /resume-cursor, /resume-codex, and /resume-foreign](docs/resume-commands.png)
@@ -53,10 +53,10 @@ Every command accepts the same arguments:
 /resume-claude latest
 /resume-grok 8f3a1c2e-…
 /resume-foreign auth
-/copy latest
+/copy-session latest
 ```
 
-`/copy` takes the same arguments but copies the **full transcript** of the
+`/copy-session` takes the same arguments but copies the **full transcript** of the
 session instead of resuming: every user and assistant message in order, plus
 tool calls and results as historical record, with a short header (project,
 branch, session id) so the next agent knows what it is looking at. Paste it
@@ -78,7 +78,7 @@ source CLI is never invoked.
 | `/resume-cursor` | `~/.cursor/projects/<encoded>/agent-transcripts/`, `~/.cursor/chats/` | `CURSOR_HOME` |
 | `/resume-codex` | `~/.codex/sessions/**/rollout-*.jsonl` | `CODEX_HOME` |
 | `/resume-grok` | `~/.grok/sessions/<encoded-cwd>/<id>/chat_history.jsonl` | `GROK_HOME` |
-| `/copy` | Any of the above | All of the above |
+| `/copy-session` | Any of the above | All of the above |
 
 Only sessions belonging to your current folder are listed, for every command
 including `/resume-foreign`. Subfolders and the parent project count too;
