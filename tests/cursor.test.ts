@@ -127,3 +127,16 @@ test("cursor list from $HOME does not swallow every project", async () => {
 	assert.equal(fromProject[0].title, "hey");
 	assert.equal(fromProject[0].lastUserRequest, "hey");
 });
+
+test("cursor rejects foreign jsonl transcripts given by path", async () => {
+	const home = tempDir("pi-resume-cursor-");
+	const foreign = join(home, "chat_history.jsonl");
+	writeJsonl(foreign, [
+		{ type: "user", content: [{ type: "text", text: "<user_query> Grok work </user_query>" }] },
+		{ type: "assistant", content: "Done." },
+	]);
+
+	const shown = await cursorReader.show(foreign, { cwd: "/tmp/cursor-foreign", home });
+	assert.equal(shown.ok, false);
+	if (!shown.ok) assert.match(shown.message, /Could not read Cursor session/);
+});

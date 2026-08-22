@@ -90,3 +90,19 @@ test("foreign latest from $HOME does not pick another project's session", async 
 	const fromProject = await resolveRef(["claude"], "latest", { cwd: projectCwd, home: join(root, "claude") });
 	assert.equal(fromProject.ok, true);
 });
+
+test("an explicit Grok transcript path resolves as grok, not another harness", async () => {
+	const root = tempDir("pi-resume-resolve-");
+	const historyPath = join(root, "chat_history.jsonl");
+	writeJsonl(historyPath, [
+		{ type: "user", content: [{ type: "text", text: "<user_query> Grok work </user_query>" }] },
+		{ type: "assistant", content: [{ type: "text", text: "Grok done." }] },
+	]);
+
+	const shown = await resolveRef(["claude", "cursor", "codex", "grok"], historyPath, { cwd: "/tmp/grok-path" });
+	assert.equal(shown.ok, true);
+	if (shown.ok) {
+		assert.equal(shown.session.harness, "grok");
+		assert.equal(shown.session.lastUserRequest, "Grok work");
+	}
+});

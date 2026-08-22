@@ -155,6 +155,16 @@ function parseRollout(path: string, options: ReaderOptions): SessionShow | null 
 	} catch {
 		return null;
 	}
+	// Codex rollouts wrap turns in session_meta/event_msg/response_item envelopes.
+	// Without one this is foreign JSONL; refuse it rather than resume an empty
+	// session under the wrong harness.
+	if (
+		!parsed.records.some(
+			(record) => record.type === "session_meta" || record.type === "event_msg" || record.type === "response_item",
+		)
+	) {
+		return null;
+	}
 	const warnings: Warning[] = [];
 	if (parsed.malformed) {
 		warnings.push({

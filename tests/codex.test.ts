@@ -132,3 +132,16 @@ test("codex unwraps user_query after a long prefix beyond maxText", async () => 
 		assert.ok(shown.session.lastUserRequest?.includes("x".repeat(20)));
 	}
 });
+
+test("codex rejects foreign jsonl transcripts given by path", async () => {
+	const home = tempDir("pi-resume-codex-");
+	const foreign = join(home, "chat_history.jsonl");
+	writeJsonl(foreign, [
+		{ type: "user", content: [{ type: "text", text: "<user_query> Grok work </user_query>" }] },
+		{ type: "assistant", content: "Done." },
+	]);
+
+	const shown = await codexReader.show(foreign, { cwd: "/tmp/codex-foreign", home });
+	assert.equal(shown.ok, false);
+	if (!shown.ok) assert.match(shown.message, /Could not read Codex session/);
+});
