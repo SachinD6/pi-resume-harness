@@ -232,3 +232,20 @@ test("grok show without any sessions reports a clear error", async () => {
 	if (shown.ok) return;
 	assert.match(shown.message, /No Grok sessions found/);
 });
+
+test("grok honors export limits: unclipped text and unbounded turns", async () => {
+	const home = tempDir("pi-resume-grok-");
+	const long = "x".repeat(3000);
+	const history: HistoryRecord[] = [
+		{ type: "user", content: [{ type: "text", text: `<user_query> ${long} </user_query>` }] },
+	];
+	for (let i = 0; i < 70; i++) history.push({ type: "assistant", content: `reply ${i}` });
+	writeGrokSession(home, CWD, SESSION, history);
+
+	const shown = await grokReader.show(SESSION, { cwd: CWD, home, maxTurns: Infinity, maxTextChars: Infinity });
+	assert.equal(shown.ok, true);
+	if (shown.ok) {
+		assert.equal(shown.session.turns.length, 71, "no turn bounding under export limits");
+		assert.ok(shown.session.turns[0]?.text.includes(long), "user text is not clipped under export limits");
+	}
+});
