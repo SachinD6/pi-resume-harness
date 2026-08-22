@@ -104,6 +104,10 @@ test("grok latest recovers turns, drops wrappers, and keeps tool calls inert", a
 	assert.ok(!serialized.includes("You are Grok"), "system prompt must never surface");
 	assert.ok(!serialized.includes("opaque-blob"), "reasoning content must never surface");
 	assert.ok(!serialized.includes("user_info"), "environment wrappers must not surface");
+	assert.ok(
+		!serialized.includes("The following skills are available"),
+		"system-reminder content must not surface",
+	);
 
 	const assistant = session.turns.find((turn) => turn.role === "assistant" && turn.toolCalls);
 	assert.ok(assistant?.toolCalls?.[0]);

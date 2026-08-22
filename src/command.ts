@@ -106,7 +106,7 @@ export async function copyHarness(
 
 	const prompt = buildHandoffPrompt(session);
 	const label = session.title || session.sessionId;
-	const copied = copyText(prompt);
+	const copied = await copyText(prompt);
 
 	if (!copied.ok) {
 		ctx.ui.notify(

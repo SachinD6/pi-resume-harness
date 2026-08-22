@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 
 export type ClipboardResult = { ok: true; tool: string } | { ok: false };
 
@@ -18,28 +18,45 @@ export function clipboardCandidates(
 	return candidates;
 }
 
-function spawnClipboard(command: string[], text: string): boolean {
-	try {
-		const result = spawnSync(command[0], command.slice(1), {
-			input: text,
-			timeout: 5000,
-			stdio: ["pipe", "ignore", "ignore"],
-		});
-		return !result.error && result.status === 0;
-	} catch {
-		return false;
-	}
+const COPY_DEADLINE_MS = 5000;
+
+/** One clipboard attempt; resolves false on spawn failure, error, or timeout. */
+export type ClipboardAttempt = (command: string[], text: string, timeoutMs: number) => Promise<boolean>;
+
+function spawnClipboard(command: string[], text: string, timeoutMs: number): Promise<boolean> {
+	return new Promise((resolve) => {
+		try {
+			const child = spawn(command[0], command.slice(1), {
+				timeout: timeoutMs,
+				stdio: ["pipe", "ignore", "ignore"],
+			});
+			child.on("error", () => resolve(false));
+			child.on("close", (code) => resolve(code === 0));
+			child.stdin.on("error", () => {});
+			child.stdin.end(text);
+		} catch {
+			resolve(false);
+		}
+	});
 }
 
-/** Copy text to the system clipboard. Returns the tool that succeeded. */
-export function copyText(
+/**
+ * Copy text to the system clipboard. Returns the tool that succeeded. Every
+ * candidate shares one deadline: each attempt gets only the time left, so a
+ * stalled tool cannot stretch the operation past COPY_DEADLINE_MS.
+ */
+export async function copyText(
 	text: string,
 	platform: NodeJS.Platform = process.platform,
 	env: NodeJS.ProcessEnv = process.env,
-): ClipboardResult {
+	attempt: ClipboardAttempt = spawnClipboard,
+): Promise<ClipboardResult> {
 	if (!text) return { ok: false };
+	const deadline = Date.now() + COPY_DEADLINE_MS;
 	for (const command of clipboardCandidates(platform, env)) {
-		if (spawnClipboard(command, text)) return { ok: true, tool: command.join(" ") };
+		const remaining = deadline - Date.now();
+		if (remaining <= 0) return { ok: false };
+		if (await attempt(command, text, remaining)) return { ok: true, tool: command.join(" ") };
 	}
 	return { ok: false };
 }

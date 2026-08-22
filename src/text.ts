@@ -1,6 +1,6 @@
 const USER_QUERY_RE = /<user_query>\s*([\s\S]*?)\s*<\/user_query>/gi;
 const BLOCKED_ENV_WRAPPER =
-	/^<(timestamp|environment_context|user_instructions|system_reminder|manually_attached_skills|user_info|git_status)\b/i;
+	/^<(timestamp|environment_context|user_instructions|system[-_]reminder|manually_attached_skills|user_info|git_status)\b/i;
 
 /** Pull the visible user prompt out of Cursor/Claude XML wrappers. */
 export function visibleUserText(text: string): string | null {
