@@ -1,6 +1,6 @@
 {
   "name": "pi-resume-harness",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Resume Claude Code, Cursor, Codex, and Grok sessions inside Pi via /resume-claude, /resume-cursor, /resume-codex, /resume-grok, and /resume-foreign, or copy a handoff anywhere with /copy",
   "type": "module",
   "license": "MIT",

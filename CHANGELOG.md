@@ -1,12 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - `/resume-grok` — resume Grok CLI sessions from `~/.grok/sessions` (`GROK_HOME`)
 - Grok titles come from `summary.json`; system prompts and encrypted reasoning are never surfaced
 - `/copy` — export any foreign session handoff to the clipboard (pbcopy / clip / wl-copy / xclip / xsel, WSL `clip.exe`)
+- `/copy` clipboard attempts share one five-second deadline; a stalled tool no longer stretches the wait
 - Windows-style session cwds recorded on another OS now match without host-path mangling
-- Grok `<user_info>` and `<git_status>` wrappers are stripped like Cursor/Claude wrappers
+- Grok `<user_info>`, `<git_status>`, and `<system-reminder>` wrappers are stripped like Cursor/Claude wrappers
+- Explicit transcript paths no longer resolve to an empty session under the wrong harness; each reader rejects foreign formats
 
 ## 0.1.2
 
