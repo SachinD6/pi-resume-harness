@@ -5,13 +5,17 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 [![Pi package](https://img.shields.io/badge/pi-package-111111)](https://pi.dev/packages)
 
-Resume **Claude Code**, **Cursor**, and **Codex** sessions inside [Pi](https://pi.dev).
+Resume **Claude Code**, **Cursor**, **Codex**, and **Grok** sessions inside
+[Pi](https://pi.dev) — or copy any session handoff to the clipboard for use
+anywhere else.
 
 ```text
 /resume-claude
 /resume-cursor
 /resume-codex
+/resume-grok
 /resume-foreign
+/copy
 ```
 
 ![Pi command palette showing /resume-claude, /resume-cursor, /resume-codex, and /resume-foreign](docs/resume-commands.png)
@@ -54,7 +58,13 @@ Restart Pi so the extension loads.
 | session id | Resume that native UUID |
 | path | Resume the transcript or rollout file at that path |
 
-`/resume-foreign` merges Claude, Cursor, and Codex into one list, newest first.
+`/resume-foreign` merges Claude, Cursor, Codex, and Grok into one list, newest
+first.
+
+`/copy` accepts the same forms and arguments as the resume commands, but writes
+the handoff prompt to the system clipboard (`pbcopy` on macOS, `clip` on
+Windows, `wl-copy`/`xclip`/`xsel` on Linux, `clip.exe` under WSL) so you can
+paste the session context into any other agent or chat window.
 
 Headless mode has no picker. It prints session ids so you can resume by id.
 
@@ -72,6 +82,8 @@ Headless mode has no picker. It prints session ids so you can resume by id.
 | `/resume-claude` | `~/.claude/projects/<slug>/*.jsonl` | `CLAUDE_CONFIG_DIR` |
 | `/resume-cursor` | `~/.cursor/projects/<encoded>/agent-transcripts/` and `~/.cursor/chats/` | `CURSOR_HOME` |
 | `/resume-codex` | `~/.codex/sessions/**/rollout-*.jsonl` | `CODEX_HOME` |
+| `/resume-grok` | `~/.grok/sessions/<encoded-cwd>/<id>/chat_history.jsonl` | `GROK_HOME` |
+| `/copy` | Any store above (clipboard export) | Same overrides |
 
 Sessions are filtered to the current working directory for every command,
 including `/resume-foreign`. `$HOME` is not treated as a match for every

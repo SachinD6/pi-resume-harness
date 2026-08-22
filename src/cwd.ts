@@ -8,7 +8,10 @@ export function expandHome(value: string): string {
 }
 
 export function normalizeCwd(cwd: string): string {
-	return resolve(expandHome(cwd));
+	const expanded = expandHome(cwd);
+	// Session metadata recorded on another OS must not be mangled by this host's
+	// path resolver: a Windows path read on POSIX still compares as a Windows path.
+	return looksWindowsPath(expanded) ? win32.resolve(expanded) : resolve(expanded);
 }
 
 function pathApi(cwd: string): PlatformPath {

@@ -126,6 +126,18 @@ function parseTranscript(path: string, fallbackCwd: string | null, options: Read
 	} catch {
 		return null;
 	}
+	// Cursor transcripts carry role-bearing message records; without one this is
+	// foreign JSONL (e.g. a Grok history) — refuse it rather than resume an empty
+	// session under the wrong harness.
+	if (
+		!parsed.records.some(
+			(record) =>
+				(record.role === "user" || record.role === "assistant" || record.role === "tool") &&
+				(!record.type || record.type === "message"),
+		)
+	) {
+		return null;
+	}
 	const warnings: Warning[] = [];
 	if (parsed.malformed) {
 		warnings.push({

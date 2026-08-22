@@ -1,9 +1,10 @@
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { copyText } from "./clipboard.ts";
 import { buildHandoffPrompt } from "./handoff.ts";
 import { pickSession, renderSessionList } from "./picker.ts";
 import { readers } from "./readers/index.ts";
 import { listHarnesses, resolveRef, shouldOpenPicker, showFromSummary } from "./resolve.ts";
-import type { Harness, SessionShow, SessionSummary } from "./types.ts";
+import { HARNESSES, type Harness, type SessionShow, type SessionSummary } from "./types.ts";
 
 const COMPLETIONS = ["latest", "continue", "-c"];
 
@@ -44,39 +45,43 @@ async function pickAndShow(
 	return shown.session;
 }
 
-export async function resumeHarness(
+/** Resolve `args` to one foreign session via picker or ref, notifying on failure. */
+async function resolveForeignSession(
 	args: string,
 	ctx: ExtensionCommandContext,
-	pi: ExtensionAPI,
 	harnesses: Harness[],
-): Promise<void> {
+): Promise<SessionShow | undefined> {
 	const options = { cwd: ctx.cwd };
 	const ref = args.trim();
 	const usePicker = shouldOpenPicker(ref, Boolean(ctx.hasUI && ctx.mode === "tui"));
-
-	let session: SessionShow | undefined;
 
 	if (usePicker) {
 		const listed = await listHarnesses(harnesses, options);
 		if (listed.length === 0) {
 			const names = harnesses.map((harness) => readers[harness].label).join(", ");
 			ctx.ui.notify(`No ${names} sessions found for ${ctx.cwd}`, "warning");
-			return;
+			return undefined;
 		}
-		session = await pickAndShow(ctx, listed, pickerTitle(harnesses), ref, options);
-		if (!session) return;
-	} else {
-		const shown = await resolveRef(harnesses, ref, options);
-		if (shown.ok) {
-			session = shown.session;
-		} else if (shown.matches?.length) {
-			session = await pickAndShow(ctx, shown.matches, shown.message, ref, options);
-			if (!session) return;
-		} else {
-			ctx.ui.notify(shown.message, "error");
-			return;
-		}
+		return pickAndShow(ctx, listed, pickerTitle(harnesses), ref, options);
 	}
+
+	const shown = await resolveRef(harnesses, ref, options);
+	if (shown.ok) return shown.session;
+	if (shown.matches?.length) {
+		return pickAndShow(ctx, shown.matches, shown.message, ref, options);
+	}
+	ctx.ui.notify(shown.message, "error");
+	return undefined;
+}
+
+export async function resumeHarness(
+	args: string,
+	ctx: ExtensionCommandContext,
+	pi: ExtensionAPI,
+	harnesses: Harness[],
+): Promise<void> {
+	const session = await resolveForeignSession(args, ctx, harnesses);
+	if (!session) return;
 
 	const prompt = buildHandoffPrompt(session);
 	const label = session.title || session.sessionId;
@@ -89,6 +94,28 @@ export async function resumeHarness(
 
 	pi.sendUserMessage(prompt);
 	ctx.ui.notify(`Resuming ${session.harness} session: ${label}`, "info");
+}
+
+export async function copyHarness(
+	args: string,
+	ctx: ExtensionCommandContext,
+	harnesses: Harness[],
+): Promise<void> {
+	const session = await resolveForeignSession(args, ctx, harnesses);
+	if (!session) return;
+
+	const prompt = buildHandoffPrompt(session);
+	const label = session.title || session.sessionId;
+	const copied = await copyText(prompt);
+
+	if (!copied.ok) {
+		ctx.ui.notify(
+			"Clipboard unavailable. Install wl-copy or xclip (Linux); pbcopy (macOS) and clip (Windows) are built in.",
+			"warning",
+		);
+		return;
+	}
+	ctx.ui.notify(`Copied ${session.harness} handoff (${label}) via ${copied.tool}`, "info");
 }
 
 export function registerResumeCommands(pi: ExtensionAPI): void {
@@ -117,5 +144,25 @@ export function registerResumeCommands(pi: ExtensionAPI): void {
 	register("resume-claude", "Continue from a Claude Code session", ["claude"]);
 	register("resume-cursor", "Continue from a Cursor session", ["cursor"]);
 	register("resume-codex", "Continue from a Codex session", ["codex"]);
-	register("resume-foreign", "Continue from a Claude, Cursor, or Codex session", ["claude", "cursor", "codex"]);
+	register("resume-grok", "Continue from a Grok session", ["grok"]);
+	register("resume-foreign", "Continue from a Claude, Cursor, Codex, or Grok session", [...HARNESSES]);
+
+	pi.registerCommand("copy", {
+		description: "Copy a foreign session handoff to the clipboard",
+		getArgumentCompletions: (prefix: string) => {
+			const items = COMPLETIONS.filter((value) => value.startsWith(prefix)).map((value) => ({
+				value,
+				label: value,
+			}));
+			return items.length > 0 ? items : null;
+		},
+		handler: async (args, ctx) => {
+			ctx.ui.setStatus("copy", "Building session handoff…");
+			try {
+				await copyHarness(args, ctx, [...HARNESSES]);
+			} finally {
+				ctx.ui.setStatus("copy", undefined);
+			}
+		},
+	});
 }

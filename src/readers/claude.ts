@@ -176,6 +176,12 @@ function parseSession(path: string, options: ReaderOptions): SessionShow | null 
 	} catch {
 		return null;
 	}
+	// Claude transcripts wrap every turn in a `message` envelope. Without one this
+	// is foreign JSONL (e.g. a Grok history); refuse it rather than resume an
+	// empty session under the wrong harness.
+	if (!parsed.records.some((record) => record.message && typeof record.message === "object")) {
+		return null;
+	}
 	const warnings: Warning[] = [];
 	if (parsed.malformed) {
 		warnings.push({

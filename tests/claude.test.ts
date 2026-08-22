@@ -178,3 +178,16 @@ test("claude unwraps slash-command XML into the title", async () => {
 		assert.equal(shown.session.lastUserRequest, "review the auth module");
 	}
 });
+
+test("claude rejects foreign jsonl transcripts given by path", async () => {
+	const home = tempDir("pi-resume-claude-");
+	const foreign = join(home, "chat_history.jsonl");
+	writeJsonl(foreign, [
+		{ type: "user", content: [{ type: "text", text: "<user_query> Grok work </user_query>" }] },
+		{ type: "assistant", content: "Done." },
+	]);
+
+	const shown = await claudeReader.show(foreign, { cwd: "/tmp/claude-foreign", home });
+	assert.equal(shown.ok, false);
+	if (!shown.ok) assert.match(shown.message, /Could not read Claude session/);
+});
