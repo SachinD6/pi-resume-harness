@@ -1,4 +1,5 @@
 import { readers } from "./readers/index.ts";
+import { renderWarnings } from "./signals.ts";
 import type { SessionShow, ToolCall, ToolResult, Turn } from "./types.ts";
 
 /**
@@ -48,7 +49,7 @@ export function buildSessionTranscript(session: SessionShow): string {
 	const label = readers[session.harness].label;
 	const transcript = session.turns.map((turn, index) => renderTurn(turn, index + 1)).join("\n\n");
 	const warnings = session.warnings.length
-		? `\n## Reader warnings\n\n${session.warnings.map((warning) => `- [${warning.code}] ${warning.message}`).join("\n")}\n`
+		? `\n## Reader warnings\n\n${renderWarnings(session.warnings)}\n`
 		: "";
 
 	return [

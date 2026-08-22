@@ -32,7 +32,7 @@ const SESSION: SessionShow = {
 test("export options keep text and turns unbounded", () => {
 	assert.equal(EXPORT_READER_OPTIONS.maxTurns, Infinity);
 	assert.equal(EXPORT_READER_OPTIONS.maxTextChars, Infinity);
-	assert.ok(EXPORT_READER_OPTIONS.maxToolChars >= 400);
+	assert.ok(EXPORT_READER_OPTIONS.maxToolChars === 2000, "tool previews keep a finite cap");
 });
 
 test("transcript export carries every turn in order with verbatim text", () => {

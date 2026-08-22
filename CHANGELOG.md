@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- `/copy` now exports the full session transcript — every user and assistant message plus tool activity, unclipped and untruncated — as portable markdown with session metadata, ready to paste into any other coding agent; it no longer copies the Pi-only handoff prompt
+- `/copy` now exports the full session transcript — every user and assistant message unclipped and untruncated, plus tool activity as previews capped at 2000 chars — as portable markdown with session metadata, ready to paste into any other coding agent; it no longer copies the Pi-only handoff prompt
 
 ## 0.2.0
 

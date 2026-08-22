@@ -33,6 +33,11 @@ export function boundTurns(turns: Turn[], maxTurns: number): { turns: Turn[]; tr
 	return { turns: turns.slice(-maxTurns), truncated: true };
 }
 
+/** Render reader warnings as the shared `- [code] message` bullet block. */
+export function renderWarnings(warnings: Warning[]): string {
+	return warnings.map((warning) => `- [${warning.code}] ${warning.message}`).join("\n");
+}
+
 export function asShow(
 	session: Omit<SessionShow, "lastUserRequest" | "lastAssistantAction" | "warnings" | "turns"> & {
 		turns: Turn[];

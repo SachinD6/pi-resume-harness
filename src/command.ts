@@ -159,7 +159,7 @@ export function registerResumeCommands(pi: ExtensionAPI): void {
 			return items.length > 0 ? items : null;
 		},
 		handler: async (args, ctx) => {
-			ctx.ui.setStatus("copy", "Building session handoff…");
+			ctx.ui.setStatus("copy", "Building session transcript…");
 			try {
 				await copyHarness(args, ctx, [...HARNESSES]);
 			} finally {
