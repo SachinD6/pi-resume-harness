@@ -21,7 +21,7 @@ carried forward, never replayed.
 /resume-codex    Resume a Codex session
 /resume-grok     Resume a Grok session
 /resume-foreign  Pick from all of the above in one list
-/copy            Put the handoff on the clipboard
+/copy            Copy the full session transcript to the clipboard
 ```
 
 ![Pi command palette showing /resume-claude, /resume-cursor, /resume-codex, and /resume-foreign](docs/resume-commands.png)
@@ -56,9 +56,13 @@ Every command accepts the same arguments:
 /copy latest
 ```
 
-`/copy` takes the same arguments but writes the handoff to the clipboard
-instead of resuming (`pbcopy` on macOS, `clip` on Windows, `wl-copy`/`xclip`/
-`xsel` on Linux, `clip.exe` under WSL — it uses whatever it finds).
+`/copy` takes the same arguments but copies the **full transcript** of the
+session instead of resuming: every user and assistant message in order, plus
+tool calls and results as historical record, with a short header (project,
+branch, session id) so the next agent knows what it is looking at. Paste it
+into any other coding agent to continue there (`pbcopy` on macOS, `clip` on
+Windows, `wl-copy`/`xclip`/`xsel` on Linux, `clip.exe` under WSL — it uses
+whatever it finds).
 
 Without a UI, no picker opens: the commands print matching session ids so you
 can resume by id.
