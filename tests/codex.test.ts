@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { codexReader } from "../src/readers/codex.ts";
+import { codexReader, newestRollouts } from "../src/readers/codex.ts";
 import { tempDir, writeJsonl } from "./helpers.ts";
 
 const SESSION = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
@@ -131,6 +131,49 @@ test("codex unwraps user_query after a long prefix beyond maxText", async () => 
 		assert.ok(!shown.session.lastUserRequest?.includes("<user_query>"));
 		assert.ok(shown.session.lastUserRequest?.includes("x".repeat(20)));
 	}
+});
+
+test("codex rollout cap keeps the newest sessions, not whichever the walk reached first", () => {
+	const id = (n: number) => `${String(n).padStart(8, "0")}-1111-4111-8111-111111111111`;
+	const file = (stamp: string, n: number) =>
+		join("/store", "sessions", "2026", "09", "14", `rollout-${stamp}-${id(n)}.jsonl`);
+	// Walk order is filesystem-defined; feed the collector an arbitrary one.
+	const walked = [
+		file("2026-01-02T03-04-05", 1),
+		file("2026-09-14T16-25-54", 9),
+		file("2026-05-06T07-08-09", 4),
+		file("2026-09-13T10-00-00", 8),
+	];
+	assert.deepEqual(newestRollouts(walked, 2), [
+		file("2026-09-14T16-25-54", 9),
+		file("2026-09-13T10-00-00", 8),
+	]);
+	assert.equal(newestRollouts(walked, 10).length, 4);
+});
+
+test("codex list reads past the walk cap so recent sessions survive a large store", async () => {
+	const cwd = "/tmp/codex-crowded";
+	const home = tempDir("pi-resume-codex-crowded-");
+	const id = (n: number) => `${String(n).padStart(8, "0")}-2222-4222-8222-222222222222`;
+	const total = 501;
+	for (let i = 0; i < total; i++) {
+		const stamp = new Date(Date.UTC(2026, 7, 1, 0, 0, i)).toISOString();
+		const name = `rollout-${stamp.slice(0, 19).replace(/:/g, "-")}-${id(i)}.jsonl`;
+		writeJsonl(join(home, "sessions", "2026", "08", "01", name), [
+			{ timestamp: stamp, type: "session_meta", payload: { id: id(i), cwd } },
+			{ timestamp: stamp, type: "event_msg", payload: { type: "user_message", message: `turn ${i}` } },
+		]);
+	}
+
+	// The 500-file cap still applies, but it now keeps the newest 500 rather
+	// than whichever 500 the walk happened to reach first.
+	const listed = await codexReader.list({ cwd, home });
+	assert.equal(listed.length, 500);
+	assert.equal(listed[0].sessionId, id(total - 1));
+	assert.equal(listed.some((session) => session.sessionId === id(0)), false);
+	const shown = await codexReader.show("latest", { cwd, home });
+	assert.equal(shown.ok, true);
+	if (shown.ok) assert.equal(shown.session.sessionId, id(total - 1));
 });
 
 test("codex rejects foreign jsonl transcripts given by path", async () => {
