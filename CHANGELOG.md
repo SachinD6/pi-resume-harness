@@ -2,6 +2,8 @@
 
 ## 0.4.0
 
+- `/resume-codex` keeps the newest rollouts when `~/.codex/sessions` holds more than 500 of them; the walk used to stop wherever it landed, hiding sessions you had just finished
+
 - Renamed `/copy` to `/copy-session` — the old name collided with the built-in
   `/copy` (which copies pi's last agent message) and was skipped from
   autocomplete. The command and its arguments are unchanged.

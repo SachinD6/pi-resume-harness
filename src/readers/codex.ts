@@ -27,12 +27,21 @@ function codexHome(home?: string): string {
 	return join(homedir(), ".codex");
 }
 
+/**
+ * Rollout names start with an ISO timestamp, so descending name order is
+ * descending time. Cap the newest ones rather than whichever ones a walk
+ * happens to reach first.
+ */
+export function newestRollouts(files: string[], maxFiles: number): string[] {
+	return [...files].sort((a, b) => (basename(a) < basename(b) ? 1 : -1)).slice(0, maxFiles);
+}
+
 function walkRollouts(root: string, maxFiles = 500): string[] {
 	const sessions = join(root, "sessions");
 	if (!existsSync(sessions)) return [];
 	const files: string[] = [];
 	const walk = (dir: string, depth: number) => {
-		if (files.length >= maxFiles || depth > 5) return;
+		if (depth > 5) return;
 		let entries: ReturnType<typeof readdirSync>;
 		try {
 			entries = readdirSync(dir, { withFileTypes: true });
@@ -43,11 +52,10 @@ function walkRollouts(root: string, maxFiles = 500): string[] {
 			const path = join(dir, entry.name);
 			if (entry.isDirectory()) walk(path, depth + 1);
 			else if (entry.isFile() && ROLLOUT_RE.test(entry.name)) files.push(path);
-			if (files.length >= maxFiles) return;
 		}
 	};
 	walk(sessions, 0);
-	return files;
+	return newestRollouts(files, maxFiles);
 }
 
 function rolloutId(path: string): string | null {
